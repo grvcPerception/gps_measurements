@@ -1,0 +1,13 @@
+<!--
+-->
+<launch>
+	<param name="use_sim_time" value="true" />
+
+        <node pkg="gps_odometry" type="gps_odometry" name="gps_odometry" output="screen">
+            <param name="gpsTopic" value="/gps/global"/>
+	    <param name="gps_frame_id" value="/map"/>
+	    <param name="angle_to_north" value="238.451066" />
+	    <param name="offset" value="-32.000" />
+        </node>
+
+</launch>

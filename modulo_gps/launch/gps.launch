@@ -1,0 +1,12 @@
+<!--
+-->
+<launch>
+
+  <arg name="portName" />
+
+  <node pkg="modulo_gps" type="gps_node" name="gps" output="screen" respawn="true">
+      <param name="gpsPort" value="/dev/ttyUSB0"/>  <!-- ttyUSB2 gpsFTDI-->
+  </node>
+
+
+</launch>
