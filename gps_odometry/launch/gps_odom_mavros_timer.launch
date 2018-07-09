@@ -1,0 +1,18 @@
+<!--
+-->
+<launch>
+	<!--param name="use_sim_time" value="true" /-->
+
+       <node pkg="gps_odometry" 
+              type="gps_odom_mavros_timer"
+              name="gps_odom_mavros_timer"
+              output="screen">
+            <param name="gpsTopic"                      value="/gps/global"/>
+	    <param name="gps_frame_id"                  value="/map"/>
+	    <param name="angle_to_north"                value="247.3379"/> <!-- -67.648640 -->
+	    <param name="offset"                        value="0.588"/>
+	    <param name="frame_rate"                	value="30"/> 
+	    <param name="out_pose_topic"                value="/mavros/vision_pose/pose"/> 
+        </node>
+
+</launch>

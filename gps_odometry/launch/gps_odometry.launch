@@ -6,7 +6,7 @@
         <node pkg="gps_odometry" type="gps_odometry" name="gps_odometry" output="screen">
             <param name="gpsTopic" value="/gps/global"/>
 	    <param name="gps_frame_id" value="/map"/>
-	    <param name="angle_to_north" value="-32.000" />
+	    <param name="angle_to_north" value="" />
 	    <param name="offset" value="0.588" />
         </node>
 

@@ -1,5 +1,3 @@
-// Jenifer Delgado Rich
-// jedelrich@hotmail.com
 // Odometria sacada de datos de GPS diferencial (< 2cm de error). El (0,0,0) del eje de referencia es la
 // primera posicion que se obtiene del GPS y este eje de referencia esta orientado en Este --> X, Norte --> Y
 
@@ -19,7 +17,8 @@
 
 ros::Publisher odom_pub;
 ros::Publisher odom_pub2;
-double ang; /* respecto al norte*/
+ros::Publisher gps_pose_pub;
+double ang, offset; /* respecto al norte*/
 
 using namespace Eigen;
 
@@ -27,6 +26,7 @@ double posIni[3], posAct[3], posAnt[3];
 bool first_time = true, initPos = false;
 
 std::string gps_frame_id;
+
 
 void wgs2ecef(double lat,double lon,double alt,double pos_ecef[3])
 {
@@ -170,6 +170,9 @@ void ecef2wgs(double pos_ecef[3], double pos_wgs[3])
     pos_wgs[2] = h;
 }
 
+geometry_msgs::PoseStamped posegps;
+ros::Timer timer;
+
 void gps_odom_callback(const sensor_msgs::NavSatFix& message)
 {
     //if(initPos == true)
@@ -186,14 +189,17 @@ void gps_odom_callback(const sensor_msgs::NavSatFix& message)
         tf::Quaternion q;
         q.setRPY(0, 0, 0);
         double pos_ref_ecef[3], pos_aux_ecef[3];
-        double th = 0.0;
+        double gamma = 0.0, posX, posY;
 
         // Latitud, longitud y altitud segun WGS84 del punto de referencia. ALEATORIO
         double lat_ref = 37.410922;	//Grados
         double lon_ref = -6.001800;	//Grados
-        double alt_ref = 3;		//Metros
+        double alt_ref = 0.2;		//Metros
 
         wgs2ecef(lat_ref, lon_ref, alt_ref, pos_ref_ecef);
+
+        geometry_msgs::Quaternion q_gps;
+        q_gps.x = 0.0; q_gps.y = 0.0; q_gps.z = 0.0; q_gps.w = 1.0;        
 
         // Latitud, longitud y altitud segun WGS84 del punto de referencia
         if(first_time == true)
@@ -210,9 +216,10 @@ void gps_odom_callback(const sensor_msgs::NavSatFix& message)
             odom_trans.child_frame_id = message.header.frame_id;
             odom_trans.transform.translation.x = 0.0;
             odom_trans.transform.translation.y = 0.0;
-            odom_trans.transform.translation.z = 0.0;
+            odom_trans.transform.translation.z = offset;
+	    std::cout << "altura " << message.altitude << std::endl;
 
-            geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
+            geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(gamma);
             odom_trans.transform.rotation = odom_quat;
 
             odom_broadcaster.sendTransform(odom_trans);
@@ -220,13 +227,20 @@ void gps_odom_callback(const sensor_msgs::NavSatFix& message)
 
             /** Odometry message **/
             msgVis.header.frame_id = gps_frame_id; // "/map"
-            msgVis.header.stamp = ros::Time::now();
+            msgVis.header.stamp = message.header.stamp;
             msgVis.child_frame_id = message.header.frame_id;
 
             msgVis.pose.pose.position.x = 0.0;
             msgVis.pose.pose.position.y = 0.0;
-            msgVis.pose.pose.position.z = 0.0;
+            msgVis.pose.pose.position.z = offset; 
             msgVis.pose.pose.orientation = odom_quat;
+
+            /** Geometry_msgs Posestamped message **/
+            // GPS does not give rotation information
+            posegps.header = msgVis.header;
+            posegps.pose.position = msgVis.pose.pose.position;
+            posegps.pose.orientation = q_gps;
+
 
 
             for(int i = 0; i < 9; i++)
@@ -237,11 +251,15 @@ void gps_odom_callback(const sensor_msgs::NavSatFix& message)
             {
                 msgVis.pose.covariance[0] = 0.0;
             }
-            odom_pub.publish(msgVis);
+            odom_pub2.publish(msgVis);
+	    timer.start();
+            gps_pose_pub.publish(posegps);
             for(int i = 0; i < 3; i++)
             {
                posAnt[i] = posIni[i];
             }
+	    posIni[2] = message.altitude;
+
 	    std::cout << "GPS_callback [First time]: La posicion inicial es x: " << odom_trans.transform.translation.x << " y: " << odom_trans.transform.translation.y << std::endl;
 	    //std::cout << "GPS_callback [First time]: La posicion inicial es x: " << posIni[0]<< " y: " << posIni[1] << std::endl;
 
@@ -254,43 +272,57 @@ void gps_odom_callback(const sensor_msgs::NavSatFix& message)
 
 
             /** Tf transform **/
-            odom_trans.header.stamp = ros::Time::now();
+            odom_trans.header.stamp = message.header.stamp;
             odom_trans.header.frame_id = gps_frame_id; // "/map"
             odom_trans.child_frame_id = message.header.frame_id;
+
+
+	    posAct[2] = message.altitude;
+
             odom_trans.transform.translation.x = (posAct[0] - posIni[0])*cos(ang) - (posAct[1] - posIni[1])*sin(ang);
             odom_trans.transform.translation.y = (posAct[0] - posIni[0])*sin(ang) + (posAct[1] - posIni[1])*cos(ang);
-            odom_trans.transform.translation.z = posAct[2] - posIni[2];
+            odom_trans.transform.translation.z = (posAct[2] - posIni[2]) + offset;
 
-            th = atan2((posAct[0] - posAnt[0])*sin(ang) + (posAct[1] - posAnt[1])*cos(ang),(posAct[0] - posAnt[0])*cos(ang) - (posAct[1] - posAnt[1])*sin(ang));
-            geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
+
+            gamma = atan2((posAct[0] - posAnt[0])*sin(ang) + (posAct[1] - posAnt[1])*cos(ang),(posAct[0] - posAnt[0])*cos(ang) - (posAct[1] - posAnt[1])*sin(ang));
+            geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(gamma);
             odom_trans.transform.rotation = odom_quat;
 
             odom_broadcaster.sendTransform(odom_trans);
 
             /** Odometry message **/
             msgVis.header.frame_id = gps_frame_id; // "/map"
-            msgVis.header.stamp = ros::Time::now();
+            msgVis.header.stamp = message.header.stamp;
             msgVis.child_frame_id = message.header.frame_id;
 
             msgVis.pose.pose.position.x = (posAct[0] - posIni[0])*cos(ang) - (posAct[1] - posIni[1])*sin(ang);
             msgVis.pose.pose.position.y = (posAct[0] - posIni[0])*sin(ang) + (posAct[1] - posIni[1])*cos(ang);
-            msgVis.pose.pose.position.z = posAct[2] - posIni[2];
+            /**msgVis.pose.pose.position.x = posX;
+            msgVis.pose.pose.position.y = posY;**/
+            msgVis.pose.pose.position.z = (posAct[2] - posIni[2]) + offset;
             msgVis.pose.pose.orientation = odom_quat;
+
+            /** Geometry_msgs Posestamped message **/
+            posegps.header = msgVis.header;
+            posegps.pose.position = msgVis.pose.pose.position;
+            posegps.pose.orientation = q_gps;
 
 
             for(int i = 0; i < 9; i++)
             {
-                msgVis.pose.covariance[0] = message.position_covariance[0];
+                msgVis.pose.covariance[i] = 0.0; /** message.position_covariance[0] **/
             }
             for(int i = 9; i < 36; i++)
             {
-                msgVis.pose.covariance[0] = 0.0;
+                msgVis.pose.covariance[i] = 0.0;
             }
 
-            if(message.status.status == 4)
-            	odom_pub.publish(msgVis);
-            else
+            /*if(message.status.status == 4){
             	odom_pub2.publish(msgVis);
+              gps_pose_pub.publish(posegps);
+            else*/
+            odom_pub2.publish(msgVis);
+            gps_pose_pub.publish(posegps);
 
             for(int i = 0; i < 3; i++)
             {
@@ -303,14 +335,18 @@ void gps_odom_callback(const sensor_msgs::NavSatFix& message)
     //}
 }
 
+void timerCallback(const ros::TimerEvent &){
+	gps_pose_pub.publish(posegps);
+}
+
 
 int main ( int argc, char** argv )
 {
-    ros::init ( argc, argv, "gps_odometry" );
+    ros::init ( argc, argv, "gps_odom_mavros_timer" );
 
     ros::NodeHandle node("~");
 
-    std::string gps_topic;
+    std::string gps_topic, out_pose_topic;
 
     if(!node.getParam("gpsTopic", gps_topic))
     {
@@ -330,14 +366,37 @@ int main ( int argc, char** argv )
         ang = 0.0;
     }
 
-    ROS_INFO_STREAM("Advertized on topic " << gps_topic);
+    if(!node.getParam("offset", offset))
+    {
+        ROS_WARN("Parameter 'offset' not set. [Default value = 0]");
+        offset = 0.0;
+    }
+
+    if(!node.getParam("out_pose_topic", out_pose_topic))
+    {
+        ROS_WARN("Parameter 'out_pose_topic' not set");
+        exit(0);
+    }
+
+    int frame_rate;
+    if(!node.getParam("frame_rate", frame_rate))
+    {
+        ROS_WARN("Parameter 'frame_rate' not set");
+        exit(0);
+    }
+
+    ROS_INFO_STREAM("Subscribed to topic " << gps_topic);
     ROS_INFO_STREAM("Frame where odom is referenced is " << gps_frame_id);
     ROS_INFO_STREAM("Angle respect to North is " << ang);
 
     ang = (ang * pi)/180;
 
-    odom_pub = node.advertise<nav_msgs::Odometry>("/odometry_ground_truth", 1);
-    odom_pub2 = node.advertise<nav_msgs::Odometry>("/odometry_ground_truth_notThatGood", 1);
+    //odom_pub = node.advertise<nav_msgs::Odometry>("/odometry_ground_truth", 1);
+    odom_pub2 = node.advertise<nav_msgs::Odometry>("/odometry_ground_truth", 1);
+    gps_pose_pub = node.advertise<geometry_msgs::PoseStamped>(out_pose_topic, 1);
+
+    timer = node.createTimer(ros::Duration(ros::Rate(frame_rate)), timerCallback, false, false);
+    //timer.start();
 
     ros::Subscriber sub = node.subscribe(gps_topic.c_str(), 1, gps_odom_callback);
 

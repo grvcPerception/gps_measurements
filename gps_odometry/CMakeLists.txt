@@ -126,6 +126,13 @@ add_executable(gps_angle_estimation src/gps_angle_estimation.cpp)
 target_link_libraries(gps_angle_estimation ${catkin_LIBRARIES})
 add_dependencies(gps_angle_estimation ${PROJECT_NAME}_generate_messages_cpp)
 
+add_executable(gps_odom_mavros src/gps_odom_mavros.cpp)
+target_link_libraries(gps_odom_mavros ${catkin_LIBRARIES})
+add_dependencies(gps_odom_mavros ${PROJECT_NAME}_generate_messages_cpp)
+
+add_executable(gps_odom_mavros_timer src/gps_odom_mavros_timer.cpp)
+target_link_libraries(gps_odom_mavros_timer ${catkin_LIBRARIES})
+add_dependencies(gps_odom_mavros ${PROJECT_NAME}_generate_messages_cpp)
 
 ## Declare a C++ library
 # add_library(gps_odometry
