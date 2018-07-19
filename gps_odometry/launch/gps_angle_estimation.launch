@@ -6,7 +6,7 @@
         <node pkg="gps_odometry" type="gps_odometry" name="gps_odometry" output="screen">
             <param name="gpsTopic" value="/gps/global"/>
 	    	<param name="gps_frame_id" value="/map"/>
-	    	<param name="angle_to_north" value="0" />
+	    	<param name="angle_to_north" value="0" /> <!--IMPORTANTE: ESTE ÁNGULO SIEMPRE A 0 PARA ESTE LAUNCH-->
         </node>
         <node pkg="gps_odometry" type="gps_angle_estimation" name="gps_angle_estimation" output="screen" required="true">
             <param name="gps_odom_Topic" value="/odometry_ground_truth"/>
